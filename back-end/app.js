@@ -25,4 +25,8 @@ app.get('/charger/:id', (req, res) => {
   res.json(Chargers[req.params.id]);
 });
 
+app.get('/ping', (req, res) => {
+  res.send('OK');
+});
+
 app.listen(port, () => console.log(`Listening on port ${port}`));
