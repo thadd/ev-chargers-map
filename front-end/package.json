@@ -13,7 +13,7 @@
     "build": "npm run build-css && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "update-token": "node get-map-token.js > src/token.json",
+    "update-token": "node get-map-token.js > src/map-token.json",
     "build-css": "npx node-sass-chokidar src/ -o src/ --importer=node_modules/node-sass-tilde-importer",
     "watch-css": "npm run build-css && npx node-sass-chokidar src/ -o src/ --watch --recursive --importer=node_modules/node-sass-tilde-importer"
   },

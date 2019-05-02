@@ -2,15 +2,31 @@ import React, { Component } from 'react';
 
 import './App.css';
 
-const TOKEN = require('./token.json');
+// NOTE: This token is generated using a signing key from Apple, you will need your
+// own key if you need a longer lived token
+const MAP_TOKEN = require('./map-token.json');
 
+// Uncomment these lines to use local endpoint
+const API_ROOT = 'http://localhost:8080';
+const FETCH_OPTIONS = {};
+
+// Uncomment these lines to use OpenShift endpoint
+// const API_ROOT = 'http://ev-chargers-app-wings-3scale-demo.e8ca.engint.openshiftapps.com';
+// const FETCH_OPTIONS = {};
+
+// Uncomment these lines to use 3scale endpoint
+// const API_ROOT = 'https://api-2445582727862.staging.gw.apicast.io:443';
+// const FETCH_OPTIONS = {headers: {'user-key': '9be4f9757ce91e4a4cd6f3d0a0cfaf60'}};
+
+// Initialize MapKit
 const mapkit = window.mapkit;
 
 mapkit.init({
-  authorizationCallback: done => done(TOKEN.token)
+  authorizationCallback: done => done(MAP_TOKEN.token)
 });
 
 const geocoder = new mapkit.Geocoder();
+
 
 class App extends Component {
   constructor(props) {
@@ -29,9 +45,12 @@ class App extends Component {
   }
 
   componentDidMount() {
+    // Default to map of CA
     geocoder.lookup('California', (err, data) => {
       this.setState({
-        map: new mapkit.Map('map', {region: data.results[0].region})
+        map: new mapkit.Map('map', {
+          region: data.results[0].region
+        })
       });
     });
   }
@@ -45,24 +64,29 @@ class App extends Component {
   handleSearch(event) {
     event.preventDefault();
 
+    // Clear any markers from previous searches
     this.state.map.removeAnnotations(this.state.annotations);
 
     geocoder.lookup(this.state.location, (err, data) => {
+      // Ensure we got a resulting location
       if (data.results.length >= 1) {
         this.setState({
           searchedLocation: data.results
         }, () => {
+          // Recenter the map
           this.state.map.setRegionAnimated(data.results[0].region, true);
 
           let {center} = data.results[0].region;
 
-          let url = new URL('http://localhost:8080/near');
+          let url = new URL(`${API_ROOT}/near`);
           url.searchParams.append('latitude', center.latitude);
           url.searchParams.append('longitude', center.longitude);
 
-          fetch(url).then(data => data.json()).then(data => {
+          // Call the API to get chargers near the center of our map
+          fetch(url, FETCH_OPTIONS).then(data => data.json()).then(data => {
             let chargers = data.map(({charger}) => charger);
 
+            // Create markers on the map for each charger
             let annotations = chargers.map(charger => new mapkit.MarkerAnnotation(
               new mapkit.Coordinate(charger.latitude, charger.longitude),
               {
@@ -77,6 +101,7 @@ class App extends Component {
               }
             ));
 
+            // Add the markers to the map
             this.state.map.addAnnotations(annotations);
 
             this.setState({
