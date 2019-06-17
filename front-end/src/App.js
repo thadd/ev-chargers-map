@@ -1,32 +1,26 @@
 import React, { Component } from 'react';
+import L from 'leaflet';
+import { OpenStreetMapProvider } from 'leaflet-geosearch';
+import 'leaflet.awesome-markers';
 
+import 'font-awesome/css/font-awesome.css';
+import 'leaflet/dist/leaflet.css';
+import 'leaflet.awesome-markers/dist/leaflet.awesome-markers.css';
 import './App.css';
 
-// NOTE: This token is generated using a signing key from Apple, you will need your
-// own key if you need a longer lived token
-const MAP_TOKEN = require('./map-token.json');
+const geocoder = new OpenStreetMapProvider();
 
 // Uncomment these lines to use local endpoint
 const API_ROOT = 'http://localhost:8080';
 const FETCH_OPTIONS = {};
 
-// Uncomment these lines to use OpenShift endpoint
+// // Uncomment these lines to use OpenShift endpoint
 // const API_ROOT = 'http://ev-chargers-app-wings-3scale-demo.e8ca.engint.openshiftapps.com';
 // const FETCH_OPTIONS = {};
 
-// Uncomment these lines to use 3scale endpoint
+// // Uncomment these lines to use 3scale endpoint
 // const API_ROOT = 'https://api-2445582727862.staging.gw.apicast.io:443';
 // const FETCH_OPTIONS = {headers: {'user-key': '9be4f9757ce91e4a4cd6f3d0a0cfaf60'}};
-
-// Initialize MapKit
-const mapkit = window.mapkit;
-
-mapkit.init({
-  authorizationCallback: done => done(MAP_TOKEN.token)
-});
-
-const geocoder = new mapkit.Geocoder();
-
 
 class App extends Component {
   constructor(props) {
@@ -46,12 +40,16 @@ class App extends Component {
 
   componentDidMount() {
     // Default to map of CA
-    geocoder.lookup('California', (err, data) => {
-      this.setState({
-        map: new mapkit.Map('map', {
-          region: data.results[0].region
-        })
-      });
+    geocoder.search({ query: 'California' })
+    .then(results => {
+      let map =  L.map('map', { center: [Number(results[0].raw.lat), Number(results[0].raw.lon)] });
+      map.fitBounds(results[0].bounds);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      this.setState({ map });
     });
   }
 
@@ -65,18 +63,22 @@ class App extends Component {
     event.preventDefault();
 
     // Clear any markers from previous searches
-    this.state.map.removeAnnotations(this.state.annotations);
+    this.state.annotations.forEach(annotation => annotation.remove());
 
-    geocoder.lookup(this.state.location, (err, data) => {
+    geocoder.search({query: this.state.location})
+    .then(results => {
       // Ensure we got a resulting location
-      if (data.results.length >= 1) {
+      if (results.length >= 1) {
         this.setState({
-          searchedLocation: data.results
+          searchedLocation: results
         }, () => {
           // Recenter the map
-          this.state.map.setRegionAnimated(data.results[0].region, true);
+          this.state.map.fitBounds(results[0].bounds);
 
-          let {center} = data.results[0].region;
+          let center = {
+            latitude: Number(results[0].raw.lat),
+            longitude: Number(results[0].raw.lon),
+          };
 
           let url = new URL(`${API_ROOT}/near`);
           url.searchParams.append('latitude', center.latitude);
@@ -86,23 +88,22 @@ class App extends Component {
           fetch(url, FETCH_OPTIONS).then(data => data.json()).then(data => {
             let chargers = data.map(({charger}) => charger);
 
+            const marker = L.AwesomeMarkers.icon({
+              icon: 'bolt',
+              markerColor: 'red',
+              prefix: 'fa',
+            });
+                  
             // Create markers on the map for each charger
-            let annotations = chargers.map(charger => new mapkit.MarkerAnnotation(
-              new mapkit.Coordinate(charger.latitude, charger.longitude),
+            let annotations = chargers.map(charger => L.marker(
+              [charger.latitude, charger.longitude],
               {
                 title: charger.station_name,
-                subtitle: charger.access_days_time,
-                callout: {
-                  calloutShouldAppearForAnnotation: () => true
-                },
-                data: {
-                  ev_network: charger.ev_network
-                },
+                icon: marker,
               }
-            ));
+            ).bindPopup(`<strong>${charger.station_name}</strong><br /><em>${charger.access_days_time}</em><br />${charger.ev_network}`));
 
-            // Add the markers to the map
-            this.state.map.addAnnotations(annotations);
+            annotations.forEach(annontation => annontation.addTo(this.state.map));
 
             this.setState({
               annotations,
