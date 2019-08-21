@@ -5,7 +5,7 @@ const geolib = require('geolib');
 const app = express();
 const port = 8080;
 
-app.use(cors());
+// app.use(cors());
 
 // Charger data comes from data.ca.gov open dataset for public DC chargers
 const CHARGERS_DATA = require('./chargers.json');
