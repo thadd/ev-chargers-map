@@ -33,7 +33,7 @@ app.get('/near', (req, res) => {
   res.json(response);
 });
 
-app.get('/charger/:id', (req, res) => {
+app.get('/chargers/:id', (req, res) => {
   res.json(Chargers[req.params.id]);
 });
 
