@@ -8,19 +8,30 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.awesome-markers/dist/leaflet.awesome-markers.css';
 import './App.css';
 
+import ApolloClient from 'apollo-boost';
+import gql from 'graphql-tag';
+
+const GraphQLClient = new ApolloClient({
+  uri: 'http://localhost:8080'
+});
+
+const CHARGERS_NEAR = gql`
+  query ChargersNear($latitude:Float!, $longitude:Float!) {
+    chargersNear(location:{
+      latitude:$latitude
+      longitude:$longitude
+    }) {
+      id
+      station_name
+      latitude
+      longitude
+      access_days_time
+      ev_network
+    }
+  }
+`;
+
 const geocoder = new OpenStreetMapProvider();
-
-// Uncomment these lines to use local endpoint
-const API_ROOT = 'http://localhost:8080';
-const FETCH_OPTIONS = {};
-
-// // Uncomment these lines to use OpenShift endpoint
-// const API_ROOT = 'http://ev-chargers-app-wings-3scale-demo.e8ca.engint.openshiftapps.com';
-// const FETCH_OPTIONS = {};
-
-// // Uncomment these lines to use 3scale endpoint
-// const API_ROOT = 'https://api-2445582727862.staging.gw.apicast.io:443';
-// const FETCH_OPTIONS = {headers: {'user-key': '9be4f9757ce91e4a4cd6f3d0a0cfaf60'}};
 
 class App extends Component {
   constructor(props) {
@@ -79,15 +90,11 @@ class App extends Component {
             latitude: Number(results[0].raw.lat),
             longitude: Number(results[0].raw.lon),
           };
+          
+          GraphQLClient.query({query: CHARGERS_NEAR, variables: center}).then(({data}) => {
+            let chargers = data.chargersNear;
 
-          let url = new URL(`${API_ROOT}/near`);
-          url.searchParams.append('latitude', center.latitude);
-          url.searchParams.append('longitude', center.longitude);
-
-          // Call the API to get chargers near the center of our map
-          fetch(url, FETCH_OPTIONS).then(data => data.json()).then(data => {
-            let chargers = data.map(({charger}) => charger);
-
+            // Define the marker style
             const marker = L.AwesomeMarkers.icon({
               icon: 'bolt',
               markerColor: 'red',
@@ -103,7 +110,21 @@ class App extends Component {
               }
             ).bindPopup(`<strong>${charger.station_name}</strong><br /><em>${charger.access_days_time}</em><br />${charger.ev_network}`));
 
+            // Add the markers to the map
             annotations.forEach(annontation => annontation.addTo(this.state.map));
+
+            // Zoom the map to the markers
+            let chargerBounds = [
+              [
+                Math.min(...chargers.map(c => c.latitude)),
+                Math.min(...chargers.map(c => c.longitude)),
+              ],
+              [
+                Math.max(...chargers.map(c => c.latitude)),
+                Math.max(...chargers.map(c => c.longitude)),
+              ],
+            ];
+            this.state.map.fitBounds(chargerBounds);
 
             this.setState({
               annotations,
@@ -132,7 +153,7 @@ class App extends Component {
 
           <div className='charger-list'>
             {this.state.chargers.map(charger => (
-              <div key={charger.objectid} className='card charger'>
+              <div key={charger.id} className='card charger'>
                 <div className='card-body'>
                   <h5 className='card-title'>{charger.station_name}</h5>
                   <p className='card-text'>

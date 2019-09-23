@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const _ = require('lodash');
 const geolib = require('geolib');
+const { ApolloServer, gql } = require('apollo-server');
 const app = express();
 const port = 8080;
 
@@ -13,32 +14,61 @@ const CHARGERS_DATA = require('./chargers.json');
 // Transform the data into a slightly more usable format
 const Chargers = _.fromPairs(CHARGERS_DATA.features.map(charger => ([
   charger.properties.OBJECTID,
-  _.mapKeys(charger.properties, (val, key) => key.toLowerCase())
+  _.mapKeys(charger.properties, (val, key) => key === 'OBJECTID' ? 'id' : key.toLowerCase())
 ])));
 
-app.get('/near', (req, res) => {
-  // Lookup the closest chargers
-  const nearest = geolib.findNearest(
-    _.mapValues(req.query, val => Number(val)), // Map querystring lat/lon params from string to numeric
-    Chargers,
-    0,
-    20                                          // 20 results 
-  );
+const typeDefs = gql`
+  type Charger {
+    id: ID
+    station_name: String
+    street_address: String
+    intersection_directions: String
+    city: String
+    state: String
+    zip: String
+    station_phone: String
+    groups_with_access_code: String
+    access_days_time: String
+    cards_accepted: String
+    ev_level_2_evse_num: String
+    ev_dc_fast_count: String
+    ev_network: String
+    ev_network_web: String
+    latitude: Float
+    longitude: Float
+    afdc_id: String
+    owner_type_code: String
+    ev_connector_types: String
+    title: String
+    author: String
+  }
 
-  let response = nearest.map(hit => ({
-    charger: Chargers[hit.key],
-    distance: hit.distance,
-  }));
+  input GeoSearchInput {
+    latitude: Float
+    longitude: Float
+  }
 
-  res.json(response);
+  type Query {
+    chargers: [Charger]
+    charger(id: ID!): Charger
+    chargersNear(location: GeoSearchInput!): [Charger]
+  }
+`;
+
+// Resolvers define the technique for fetching the types defined in the
+// schema. This resolver retrieves books from the "books" array above.
+const resolvers = {
+  Query: {
+    chargers: () => Object.values(Chargers),
+    charger: (parent, args) => Chargers[args.id],
+    chargersNear: (parent, args) => geolib.findNearest(
+      {latitude: args.location.latitude, longitude: args.location.longitude},
+      Chargers, 0, 20
+    )
+  },
+};
+
+const server = new ApolloServer({ typeDefs, resolvers });
+server.listen({port}).then(({ url }) => {
+  console.log(`🚀  Server ready at ${url}`);
 });
-
-app.get('/chargers/:id', (req, res) => {
-  res.json(Chargers[req.params.id]);
-});
-
-app.get('/ping', (req, res) => {
-  res.send('OK');
-});
-
-app.listen(port, () => console.log(`Listening on port ${port}`));
