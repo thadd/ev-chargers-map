@@ -1,21 +1,38 @@
+$grid-gutter-width: 0px !default;
+
 @import '~bootstrap/scss/bootstrap';
 
-.root {
-  display: flex;
-  flex-direction: row;
-  height: 100vh;
+#root {
+  @extend .container-fluid;
   font-family: tahoma;
 }
 
-#map {
-  align-self: stretch;
-  flex-grow: 1;
+.root {
+  @extend .row;
+  height: 100vh;
 }
 
+
 #actions {
+  @extend .col-md-3;
   padding: 10px;
-  width: 20%;
   overflow-y: scroll;
+}
+
+#map-container {
+  @extend .col-md-9;
+  height: 100%;
+  width: 100%;
+}
+
+#map {
+  height: 100%;
+  width: 100%;
+}
+
+.charger-list {
+  @extend .d-none;
+  @extend .d-md-block;
 }
 
 .card.charger {

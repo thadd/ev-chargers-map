@@ -90,7 +90,7 @@ class App extends Component {
             latitude: Number(results[0].raw.lat),
             longitude: Number(results[0].raw.lon),
           };
-          
+
           GraphQLClient.query({query: CHARGERS_NEAR, variables: center}).then(({data}) => {
             let chargers = data.chargersNear;
 
@@ -164,7 +164,7 @@ class App extends Component {
             ))}
           </div>
         </div>
-        <div id='map' />
+        <div id='map-container'><div id='map' /></div>
       </div>
     );
   }
