@@ -55,12 +55,12 @@ const typeDefs = gql`
   }
 `;
 
-// Resolvers define the technique for fetching the types defined in the
-// schema. This resolver retrieves books from the "books" array above.
 const resolvers = {
   Query: {
     chargers: () => Object.values(Chargers),
+
     charger: (parent, args) => Chargers[args.id],
+    
     chargersNear: (parent, args) => geolib.findNearest(
       {latitude: args.location.latitude, longitude: args.location.longitude},
       Chargers, 0, 20
