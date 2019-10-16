@@ -6,8 +6,6 @@ const { VoyagerServer, gql } = require('@aerogear/voyager-server');
 const app = express();
 const port = 8080;
 
-app.use(cors());
-
 // Charger data comes from data.ca.gov open dataset for public DC chargers
 const CHARGERS_DATA = require('./chargers.json');
 
@@ -70,7 +68,8 @@ const resolvers = {
 
 const server = new VoyagerServer({ typeDefs, resolvers });
 
-server.applyMiddleware({ app });
+server.applyMiddleware({ app, cors: true });
+// server.applyMiddleware(cors());
 
 app.listen(port, () => {
   console.log(`🚀  Server ready`);
