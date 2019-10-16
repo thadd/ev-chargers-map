@@ -68,8 +68,12 @@ const resolvers = {
 
 const server = new VoyagerServer({ typeDefs, resolvers });
 
-server.applyMiddleware({ app, cors: true });
-// server.applyMiddleware(cors());
+server.applyMiddleware({app, cors: {
+  origin: '*',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}});
 
 app.listen(port, () => {
   console.log(`🚀  Server ready`);
