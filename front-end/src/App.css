@@ -7040,6 +7040,8 @@ a.text-dark:hover, a.text-dark:focus {
 #actions {
   padding: 10px;
   overflow-y: scroll; }
+  #actions .profile {
+    margin-bottom: 1em; }
 
 #map-container {
   height: 100%;
@@ -7048,6 +7050,13 @@ a.text-dark:hover, a.text-dark:focus {
 #map {
   height: 100%;
   width: 100%; }
+
+.favorite {
+  margin-right: 1em; }
+  .favorite .far.fa-star {
+    color: #bbb; }
+  .favorite .fas.fa-star {
+    color: #ee0; }
 
 .card.charger {
   margin: 10px; }

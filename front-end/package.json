@@ -4,6 +4,9 @@
   "private": true,
   "homepage": "./",
   "dependencies": {
+    "@aerogear/app": "^2.7.0",
+    "@aerogear/auth": "^2.7.0",
+    "@aerogear/voyager-client": "^2.7.0",
     "@apollo/react-hooks": "^3.1.1",
     "apollo-boost": "^0.4.4",
     "font-awesome": "^4.7.0",
@@ -11,8 +14,10 @@
     "leaflet": "^1.5.1",
     "leaflet-geosearch": "^2.7.0",
     "leaflet.awesome-markers": "^2.0.5",
+    "lodash": "^4.17.15",
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
+    "react-leaflet": "^2.4.0",
     "react-scripts": "^3.0.1"
   },
   "scripts": {

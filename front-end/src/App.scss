@@ -17,6 +17,10 @@ $grid-gutter-width: 0px !default;
   @extend .col-md-3;
   padding: 10px;
   overflow-y: scroll;
+
+  .profile {
+    margin-bottom: 1em;
+  }
 }
 
 #map-container {
@@ -28,6 +32,18 @@ $grid-gutter-width: 0px !default;
 #map {
   height: 100%;
   width: 100%;
+}
+
+.favorite {
+  margin-right: 1em;
+  
+  .far.fa-star {
+    color: #bbb;
+  }
+
+  .fas.fa-star {
+    color: #ee0;
+  }
 }
 
 .charger-list {
