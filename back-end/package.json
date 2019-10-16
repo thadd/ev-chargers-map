@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "apollo-server": "^2.9.3",
+    "@aerogear/voyager-server": "^0.7.1",
     "bluebird": "^3.5.4",
     "body-parser": "^1.18.3",
     "cors": "^2.8.5",

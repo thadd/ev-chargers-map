@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const _ = require('lodash');
 const geolib = require('geolib');
-const { ApolloServer, gql } = require('apollo-server');
+const { VoyagerServer, gql } = require('@aerogear/voyager-server');
 const app = express();
 const port = 8080;
 
@@ -68,7 +68,10 @@ const resolvers = {
   },
 };
 
-const server = new ApolloServer({ typeDefs, resolvers });
-server.listen({port}).then(({ url }) => {
-  console.log(`🚀  Server ready at ${url}`);
+const server = new VoyagerServer({ typeDefs, resolvers });
+
+server.applyMiddleware({ app });
+
+app.listen(port, () => {
+  console.log(`🚀  Server ready`);
 });
