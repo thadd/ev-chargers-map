@@ -9,6 +9,7 @@
     "@aerogear/voyager-client": "^2.7.0",
     "@apollo/react-hooks": "^3.1.1",
     "apollo-boost": "^0.4.4",
+    "bluebird": "^3.7.1",
     "font-awesome": "^4.7.0",
     "graphql": "^14.5.7",
     "leaflet": "^1.5.1",

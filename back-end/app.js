@@ -15,6 +15,8 @@ const Chargers = _.fromPairs(CHARGERS_DATA.features.map(charger => ([
   _.mapKeys(charger.properties, (val, key) => key === 'OBJECTID' ? 'id' : key.toLowerCase())
 ])));
 
+let favorites = [];
+
 const typeDefs = gql`
   type Charger {
     id: ID
@@ -41,6 +43,10 @@ const typeDefs = gql`
     author: String
   }
 
+  type Favorite {
+    id: ID
+  }
+
   input GeoSearchInput {
     latitude: Float
     longitude: Float
@@ -50,6 +56,11 @@ const typeDefs = gql`
     chargers: [Charger]
     charger(id: ID!): Charger
     chargersNear(location: GeoSearchInput!): [Charger]
+    favorites: [Favorite]
+  }
+
+  type Mutation {
+    setFavorite(id: ID!, isFavorite: Boolean!): [Favorite]
   }
 `;
 
@@ -62,18 +73,27 @@ const resolvers = {
     chargersNear: (parent, args) => geolib.findNearest(
       {latitude: args.location.latitude, longitude: args.location.longitude},
       Chargers, 0, 20
-    )
+    ),
+
+    favorites: () => favorites.map(favorite => ({id: favorite}))
   },
+
+  Mutation: {
+    setFavorite: (parent, args, context, info) => {
+      if (args.isFavorite) {
+        favorites = [...favorites, args.id];
+      } else {
+        favorites = _.without(favorites, args.id);
+      }
+
+      return favorites.map(favorite => ({id: favorite}));
+    }
+  }
 };
 
 const server = new VoyagerServer({ typeDefs, resolvers });
 
-server.applyMiddleware({app, cors: {
-  origin: '*',
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}});
+server.applyMiddleware({app, cors: true});
 
 app.listen(port, () => {
   console.log(`🚀  Server ready`);

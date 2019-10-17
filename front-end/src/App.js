@@ -1,5 +1,4 @@
 import React, { Component } from 'react';
-import ReactDOMServer from "react-dom/server";
 
 import L from 'leaflet';
 import { OpenStreetMapProvider } from 'leaflet-geosearch';
@@ -7,6 +6,7 @@ import _ from 'lodash';
 import gql from 'graphql-tag';
 import { OfflineClient } from '@aerogear/voyager-client';
 import { Auth } from '@aerogear/auth';
+import * as Promise from 'bluebird';
 
 import { Map, Marker, Popup, TileLayer } from 'react-leaflet'
 
@@ -19,17 +19,23 @@ import './App.css';
 
 import { init } from "@aerogear/app";
 
+// Initialize mobile services
 const MOBILE_SERVICES = require('./mobile-services.json');
 const app = init(MOBILE_SERVICES);
 
+// Set up auth service
 const authService = new Auth(app.config);
 
-const dataSyncConfig = _.find(app.config.configurations, {type: 'sync-app'});
+// Set up data sync service
+// const dataSyncConfig = _.find(app.config.configurations, {type: 'sync-app'});
 const dataSyncService = new OfflineClient({
-  httpUrl: dataSyncConfig.url,
-  wsUrl: dataSyncConfig.config.websocketUrl,
+  httpUrl: 'http://localhost:8080/graphql',
+  wsUrl: 'http://localhost:8080/graphql',
+  // httpUrl: dataSyncConfig.url,
+  // wsUrl: dataSyncConfig.config.websocketUrl,
 });
 
+// Define GraphQL queries we'll use
 const CHARGERS_NEAR = gql`
   query ChargersNear($latitude:Float!, $longitude:Float!) {
     chargersNear(location:{
@@ -45,7 +51,22 @@ const CHARGERS_NEAR = gql`
     }
   }
 `;
+const FAVORITES = gql`
+  query Favorites {
+    favorites {
+      id
+    }
+  }
+`;
+const SET_FAVORITE = gql`
+  mutation SetFavorite($id:ID!, $isFavorite:Boolean!) {
+    setFavorite(id:$id, isFavorite:$isFavorite) {
+      id
+    }
+  }
+`;
 
+// Set up the map markers
 const MARKER_ICON = L.AwesomeMarkers.icon({
   icon: 'bolt',
   markerColor: 'red',
@@ -54,6 +75,7 @@ const MARKER_ICON = L.AwesomeMarkers.icon({
 
 const geocoder = new OpenStreetMapProvider();
 
+// Map popup when user clicks a charger
 const ChargerPopup = props => (
   <div className='station-popup'>
     {props.isAuthenticated && (
@@ -105,11 +127,10 @@ class App extends Component {
     // Initialize the data sync service
     dataSyncService.init()
     .then(dataClient => {
-      console.log('data sync service initialized', dataClient);
-
       // Capture the sync client for use later
-      this.setState({dataClient});
+      return Promise.fromCallback(callback => this.setState({dataClient}, callback));
     }, err => console.error('data sync initialization rejection', err))
+
     // Initialize the auth service
     .then(() => authService.init({}))
     .then(() => {
@@ -131,11 +152,13 @@ class App extends Component {
         isAuthenticated: authService.isAuthenticated(),
       })
     })
+    .then(() => this.state.dataClient.query({query: FAVORITES, fetchPolicy: 'network-only'}))
+    .then(({data}) => this.setState({favoriteChargers: _.map(data.favorites, 'id')}))
+    .then(() => console.log('initialization complete'))
     .catch(err => console.error('initialization error', err));
   }
 
   initializeMap() {
-    console.log('hi');
     // Default to map of CA
     geocoder.search({ query: 'California' })
     .then(results => {
@@ -268,16 +291,30 @@ class App extends Component {
   }
 
   handleToggleFavorites(chargerId) {
-    console.log('handle favorite', chargerId);
-    if (this.state.favoriteChargers.includes(chargerId)) {
+    return Promise.fromCallback(callback => {
+      let newFavoritesArray;
+
+      if (this.state.favoriteChargers.includes(chargerId)) {
+        newFavoritesArray = _.without(this.state.favoriteChargers, chargerId);
+      } else {
+        newFavoritesArray = [...(this.state.favoriteChargers), chargerId];
+      }
+
       this.setState({
-        favoriteChargers: _.without(this.state.favoriteChargers, chargerId),
-      });
-    } else {
-      this.setState({
-        favoriteChargers: [...(this.state.favoriteChargers), chargerId],
-      });
-    }
+        favoriteChargers: newFavoritesArray,
+      }, callback);
+    })
+    .then(() => (
+      this.state.dataClient.mutate({
+        mutation: SET_FAVORITE,
+        variables: {
+          id: chargerId,
+          isFavorite: this.state.favoriteChargers.includes(chargerId),
+        },
+        fetchPolicy: 'no-cache'
+      })
+    ))
+    .catch(err => console.error('mutation', err));
   }
 
   render() {
