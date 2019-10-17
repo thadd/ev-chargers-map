@@ -3,7 +3,12 @@ const cors = require('cors');
 const _ = require('lodash');
 const geolib = require('geolib');
 const { VoyagerServer, gql } = require('@aerogear/voyager-server');
+const { KeycloakSecurityService } = require('@aerogear/voyager-keycloak')
+
+const MOBILE_SERVICES = require('./mobile-services.json');
+
 const app = express();
+app.use(cors());
 const port = 8080;
 
 // Charger data comes from data.ca.gov open dataset for public DC chargers
@@ -64,17 +69,21 @@ const typeDefs = gql`
   }
 `;
 
-const resolvers = {
+const unauthenticatedResolvers = {
   Query: {
     chargers: () => Object.values(Chargers),
 
     charger: (parent, args) => Chargers[args.id],
     
-    chargersNear: (parent, args) => geolib.findNearest(
+    chargersNear: (parent, args, context) => geolib.findNearest(
       {latitude: args.location.latitude, longitude: args.location.longitude},
       Chargers, 0, 20
     ),
+  }
+}
 
+const authenticatedResolvers = {
+  Query: {
     favorites: () => favorites.map(favorite => ({id: favorite}))
   },
 
@@ -91,9 +100,14 @@ const resolvers = {
   }
 };
 
-const server = new VoyagerServer({ typeDefs, resolvers });
+const keycloakService = new KeycloakSecurityService(_.find(MOBILE_SERVICES.services, {type: 'keycloak'}).config);
 
-server.applyMiddleware({app, cors: true});
+const server = new VoyagerServer({ typeDefs, resolvers: _.merge(unauthenticatedResolvers, authenticatedResolvers) }, { securityService: keycloakService });
+keycloakService.applyAuthMiddleware(app, { apiPath: '/auth-graphql' });
+server.applyMiddleware({app, cors: true, path: '/auth-graphql'});
+
+openServer = new VoyagerServer({ typeDefs, resolvers: unauthenticatedResolvers });
+openServer.applyMiddleware({app, cors: true});
 
 app.listen(port, () => {
   console.log(`🚀  Server ready`);

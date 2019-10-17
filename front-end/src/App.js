@@ -26,15 +26,6 @@ const app = init(MOBILE_SERVICES);
 // Set up auth service
 const authService = new Auth(app.config);
 
-// Set up data sync service
-// const dataSyncConfig = _.find(app.config.configurations, {type: 'sync-app'});
-const dataSyncService = new OfflineClient({
-  httpUrl: 'http://localhost:8080/graphql',
-  wsUrl: 'http://localhost:8080/graphql',
-  // httpUrl: dataSyncConfig.url,
-  // wsUrl: dataSyncConfig.config.websocketUrl,
-});
-
 // Define GraphQL queries we'll use
 const CHARGERS_NEAR = gql`
   query ChargersNear($latitude:Float!, $longitude:Float!) {
@@ -124,15 +115,8 @@ class App extends Component {
   }
 
   componentDidMount() {
-    // Initialize the data sync service
-    dataSyncService.init()
-    .then(dataClient => {
-      // Capture the sync client for use later
-      return Promise.fromCallback(callback => this.setState({dataClient}, callback));
-    }, err => console.error('data sync initialization rejection', err))
-
     // Initialize the auth service
-    .then(() => authService.init({}))
+    authService.init({})
     .then(() => {
       if (authService.isAuthenticated()) {
         // Load the user profile if we're logged in
@@ -152,8 +136,43 @@ class App extends Component {
         isAuthenticated: authService.isAuthenticated(),
       })
     })
-    .then(() => this.state.dataClient.query({query: FAVORITES, fetchPolicy: 'network-only'}))
-    .then(({data}) => this.setState({favoriteChargers: _.map(data.favorites, 'id')}))
+    // Initialize the data sync service
+    .then(() => {
+      // Set up data sync service
+      const dataSyncConfig = _.find(app.config.configurations, {type: 'sync-app'});
+
+      const clientOptions = {
+        httpUrl: `http://localhost:8080/${authService.isAuthenticated() ? 'auth-' : ''}graphql`,
+        wsUrl: `http://localhost:8080/${authService.isAuthenticated() ? 'auth-' : ''}graphql`,
+        // httpUrl: dataSyncConfig.url,
+        // wsUrl: dataSyncConfig.config.websocketUrl,
+      }
+
+      if (authService.isAuthenticated()) {
+        const token = authService.extract().token;
+        clientOptions.authContextProvider = () => {
+          return {
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
+            token,
+          }
+        };
+      }
+
+      const dataSyncService = new OfflineClient(clientOptions);
+      return dataSyncService.init();
+    })
+    .then(dataClient => {
+      // Capture the sync client for use later
+      return Promise.fromCallback(callback => this.setState({dataClient}, callback));
+    }, err => console.error('data sync initialization rejection', err))
+    .then(() => {
+      if (authService.isAuthenticated()) {
+        return this.state.dataClient.query({query: FAVORITES, fetchPolicy: 'network-only'})
+        .then(({data}) => this.setState({favoriteChargers: _.map(data.favorites, 'id')}));
+      }
+    })
     .then(() => console.log('initialization complete'))
     .catch(err => console.error('initialization error', err));
   }
@@ -341,60 +360,66 @@ class App extends Component {
                   <button className='btn btn-secondary btn-sm pull-right' onClick={() => this.handleLogout()}><i className='fa fa-user' /> Log out</button>
                 </React.Fragment>
               ) : (
-                <div className='text-right'>
+                <div className='text-center'>
                   <button className='btn btn-secondary btn-sm' onClick={() => this.handleLogin()}><i className='fa fa-user' /> Log in</button>
                 </div>
               )
             )}
           </div>
 
-          <form onSubmit={this.handleSearch}>
-            <div className='form-group'>
-              <div className='input-group'>
-                <input className='form-control' type='text' value={this.state.location} onChange={this.handleLocationUpdate} />
-                <div className='input-group-append'>
-                  <button className='btn btn-primary' type='submit'><i className='fa fa-search' /></button>
+          {/*this.state.isAuthenticated*/ true && (
+            <React.Fragment>
+              <form onSubmit={this.handleSearch}>
+                <div className='form-group'>
+                  <div className='input-group'>
+                    <input className='form-control' type='text' value={this.state.location} onChange={this.handleLocationUpdate} />
+                    <div className='input-group-append'>
+                      <button className='btn btn-primary' type='submit'><i className='fa fa-search' /></button>
+                    </div>
+                  </div>
                 </div>
+              </form>
+
+              <div className='charger-list'>
+                {this.state.chargers.map(charger => (
+                  <div key={charger.id} className='card charger'>
+                    <div className='card-body'>
+                      <h5 className='card-title'>{charger.station_name}</h5>
+                      <p className='card-text'>
+                        {charger.access_days_time}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
+            </React.Fragment>
+          )}
+        </div>
+        {this.state.dataClient && (
+          <div id='map-container'>
+            <div id='map'>
+              <Map id='map' center={mapCenter} {...mapOptions} whenReady={this.initializeMap}>
+                <TileLayer
+                  url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                  attribution='&copy; <a href=&quot;http://osm.org/copyright&quot;>OpenStreetMap</a> contributors'
+                />
+
+                {this.state.chargers.map(charger => (
+                  <Marker key={charger.id} position={[charger.latitude, charger.longitude]} icon={MARKER_ICON}>
+                    <Popup>
+                      <ChargerPopup
+                        {...charger}
+                        isAuthenticated={this.state.isAuthenticated}
+                        isFavorite={this.state.favoriteChargers.includes(charger.id)}
+                        toggleFavorite={this.handleToggleFavorites}
+                        />
+                    </Popup>
+                  </Marker>
+                ))}
+              </Map>
             </div>
-          </form>
-
-          <div className='charger-list'>
-            {this.state.chargers.map(charger => (
-              <div key={charger.id} className='card charger'>
-                <div className='card-body'>
-                  <h5 className='card-title'>{charger.station_name}</h5>
-                  <p className='card-text'>
-                    {charger.access_days_time}
-                  </p>
-                </div>
-              </div>
-            ))}
           </div>
-        </div>
-        <div id='map-container'>
-          <div id='map'>
-            <Map id='map' center={mapCenter} {...mapOptions} whenReady={this.initializeMap}>
-              <TileLayer
-                url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-                attribution='&copy; <a href=&quot;http://osm.org/copyright&quot;>OpenStreetMap</a> contributors'
-              />
-
-              {this.state.chargers.map(charger => (
-                <Marker key={charger.id} position={[charger.latitude, charger.longitude]} icon={MARKER_ICON}>
-                  <Popup>
-                    <ChargerPopup
-                      {...charger}
-                      isAuthenticated={this.state.isAuthenticated}
-                      isFavorite={this.state.favoriteChargers.includes(charger.id)}
-                      toggleFavorite={this.handleToggleFavorites}
-                      />
-                  </Popup>
-                </Marker>
-              ))}
-            </Map>
-          </div>
-        </div>
+        )}
       </div>
     );
   }
