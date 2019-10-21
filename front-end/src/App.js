@@ -142,10 +142,10 @@ class App extends Component {
       const dataSyncConfig = _.find(app.config.configurations, {type: 'sync-app'});
 
       const clientOptions = {
-        httpUrl: `http://localhost:8080/${authService.isAuthenticated() ? 'auth-' : ''}graphql`,
-        wsUrl: `http://localhost:8080/${authService.isAuthenticated() ? 'auth-' : ''}graphql`,
-        // httpUrl: dataSyncConfig.url,
-        // wsUrl: dataSyncConfig.config.websocketUrl,
+        // httpUrl: `http://localhost:8080/${authService.isAuthenticated() ? 'auth-' : ''}graphql`,
+        // wsUrl: `http://localhost:8080/${authService.isAuthenticated() ? 'auth-' : ''}graphql`,
+        httpUrl: `${dataSyncConfig.url}${authService.isAuthenticated() ? '-auth' : ''}`,
+        wsUrl: `${dataSyncConfig.config.websocketUrl}${authService.isAuthenticated() ? '-auth' : ''}`,
       }
 
       if (authService.isAuthenticated()) {

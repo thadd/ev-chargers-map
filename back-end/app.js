@@ -139,8 +139,8 @@ const authenticatedResolvers = {
 const keycloakService = new KeycloakSecurityService(_.find(MOBILE_SERVICES.services, {type: 'keycloak'}).config);
 
 const server = new VoyagerServer({ typeDefs, resolvers: _.merge(unauthenticatedResolvers, authenticatedResolvers) }, { securityService: keycloakService });
-keycloakService.applyAuthMiddleware(app, { apiPath: '/auth-graphql' });
-server.applyMiddleware({app, cors: true, path: '/auth-graphql'});
+keycloakService.applyAuthMiddleware(app, { apiPath: '/graphql-auth' });
+server.applyMiddleware({app, cors: true, path: '/graphql-auth'});
 
 openServer = new VoyagerServer({ typeDefs, resolvers: unauthenticatedResolvers });
 openServer.applyMiddleware({app, cors: true});
