@@ -1,1 +1,29 @@
-../../mobile-services.json
+{
+  "clientId": "ev-chargers-map",
+  "namespace": "mobile-developer-console",
+  "services": [
+    {
+      "config": {
+        "auth-server-url": "https://sso-user-sso.apps.thadd-8469.open.redhat.com/auth",
+        "confidential-port": 0,
+        "public-client": true,
+        "realm": "ev-chargers-map-realm",
+        "resource": "ev-chargers-map-client",
+        "ssl-required": "external"
+      },
+      "id": "a999ff9f-ef90-11e9-bce8-12f216a753ee",
+      "name": "keycloak",
+      "type": "keycloak",
+      "url": "https://sso-user-sso.apps.thadd-8469.open.redhat.com/auth"
+    },
+    {
+      "config": {
+        "websocketUrl": "ws://ev-chargers-backend-ev-chargers-map.apps.thadd-8469.open.redhat.com/graphql"
+      },
+      "id": "30488353-f01f-11e9-bce8-12f216a753ee",
+      "name": "sync-app",
+      "type": "sync-app",
+      "url": "http://ev-chargers-backend-ev-chargers-map.apps.thadd-8469.open.redhat.com/graphql"
+    }
+  ]
+}
