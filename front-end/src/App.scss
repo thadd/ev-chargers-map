@@ -67,4 +67,8 @@ $grid-gutter-width: 0px !default;
     font-size: 14px;
     color: #888;
   }
+
+  &.favorite {
+    background-color: #ffd;
+  }
 }

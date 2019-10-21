@@ -4,6 +4,7 @@ const _ = require('lodash');
 const geolib = require('geolib');
 const { VoyagerServer, gql } = require('@aerogear/voyager-server');
 const { KeycloakSecurityService } = require('@aerogear/voyager-keycloak')
+const mongoose = require('mongoose');
 
 const MOBILE_SERVICES = require('./mobile-services.json');
 
@@ -20,7 +21,27 @@ const Chargers = _.fromPairs(CHARGERS_DATA.features.map(charger => ([
   _.mapKeys(charger.properties, (val, key) => key === 'OBJECTID' ? 'id' : key.toLowerCase())
 ])));
 
-let favorites = [];
+const MONGODB_SERVICE_HOST = _.defaultTo(process.env.MONGODB_SERVICE_HOST, 'localhost');
+const MONGODB_SERVICE_PORT = _.defaultTo(process.env.MONGODB_SERVICE_PORT, '27017');
+const MONGODB_DATABASE = _.defaultTo(process.env.MONGODB_DATABASE, 'admin');
+const MONGO_URL = `mongodb://${MONGODB_SERVICE_HOST}:${MONGODB_SERVICE_PORT}/${MONGODB_DATABASE}`
+
+console.log('Connecting to', MONGO_URL)
+
+mongoose.connect(MONGO_URL, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  useFindAndModify: false,
+});
+const db = mongoose.connection;
+db.on('error', console.error.bind(console, 'connection error:'));
+db.once('open', () => console.log('Connected to MongoDB'));
+
+const FavoritesSchema = new mongoose.Schema({
+  username: String,
+  chargers: [String],
+});
+const Favorites = mongoose.model('Favorites', FavoritesSchema);
 
 const typeDefs = gql`
   type Charger {
@@ -84,18 +105,33 @@ const unauthenticatedResolvers = {
 
 const authenticatedResolvers = {
   Query: {
-    favorites: () => favorites.map(favorite => ({id: favorite}))
+    favorites: (parent, args, context) => {
+      return Favorites.find({ username: context.auth.accessToken.content.preferred_username})
+      .then(data => data.length > 0 ? data[0].chargers : [])
+      .then(data => _.map(data, item => ({id: item})))
+    }
   },
 
   Mutation: {
     setFavorite: (parent, args, context, info) => {
-      if (args.isFavorite) {
-        favorites = [...favorites, args.id];
-      } else {
-        favorites = _.without(favorites, args.id);
-      }
+      return Favorites.find({ username: context.auth.accessToken.content.preferred_username})
+      .then(data => {
+        let newFavoritesList = data.length > 0 ? data[0].chargers : [];
 
-      return favorites.map(favorite => ({id: favorite}));
+        if (args.isFavorite) {
+          newFavoritesList = [...newFavoritesList, args.id];
+        } else {
+          newFavoritesList = _.without(newFavoritesList, args.id);
+        }
+
+        return Favorites.findOneAndUpdate(
+          { username: context.auth.accessToken.content.preferred_username },
+          { chargers: _.uniq(newFavoritesList) },
+          { upsert: true },
+        );
+      })
+      .then(({chargers}) => chargers)
+      .catch(console.error);
     }
   }
 };

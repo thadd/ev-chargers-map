@@ -7068,3 +7068,5 @@ a.text-dark:hover, a.text-dark:focus {
   .card.charger .card-text {
     font-size: 14px;
     color: #888; }
+  .card.charger.favorite {
+    background-color: #ffd; }

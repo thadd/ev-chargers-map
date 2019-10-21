@@ -367,33 +367,29 @@ class App extends Component {
             )}
           </div>
 
-          {/*this.state.isAuthenticated*/ true && (
-            <React.Fragment>
-              <form onSubmit={this.handleSearch}>
-                <div className='form-group'>
-                  <div className='input-group'>
-                    <input className='form-control' type='text' value={this.state.location} onChange={this.handleLocationUpdate} />
-                    <div className='input-group-append'>
-                      <button className='btn btn-primary' type='submit'><i className='fa fa-search' /></button>
-                    </div>
-                  </div>
+          <form onSubmit={this.handleSearch}>
+            <div className='form-group'>
+              <div className='input-group'>
+                <input className='form-control' type='text' value={this.state.location} onChange={this.handleLocationUpdate} />
+                <div className='input-group-append'>
+                  <button className='btn btn-primary' type='submit'><i className='fa fa-search' /></button>
                 </div>
-              </form>
-
-              <div className='charger-list'>
-                {this.state.chargers.map(charger => (
-                  <div key={charger.id} className='card charger'>
-                    <div className='card-body'>
-                      <h5 className='card-title'>{charger.station_name}</h5>
-                      <p className='card-text'>
-                        {charger.access_days_time}
-                      </p>
-                    </div>
-                  </div>
-                ))}
               </div>
-            </React.Fragment>
-          )}
+            </div>
+          </form>
+
+          <div className='charger-list'>
+            {this.state.chargers.map(charger => (
+              <div key={charger.id} className={`card charger ${this.state.favoriteChargers.includes(charger.id) ? 'favorite' : ''}`}>
+                <div className='card-body'>
+                  <h5 className='card-title'>{charger.station_name}</h5>
+                  <p className='card-text'>
+                    {charger.access_days_time}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
         {this.state.dataClient && (
           <div id='map-container'>
