@@ -21,10 +21,13 @@ const Chargers = _.fromPairs(CHARGERS_DATA.features.map(charger => ([
   _.mapKeys(charger.properties, (val, key) => key === 'OBJECTID' ? 'id' : key.toLowerCase())
 ])));
 
+const MONGODB_USER = _.defaultTo(process.env.MONGODB_USER, undefined);
+const MONGODB_PASSWORD = _.defaultTo(process.env.MONGODB_PASSWORD, undefined);
 const MONGODB_SERVICE_HOST = _.defaultTo(process.env.MONGODB_SERVICE_HOST, 'localhost');
 const MONGODB_SERVICE_PORT = _.defaultTo(process.env.MONGODB_SERVICE_PORT, '27017');
 const MONGODB_DATABASE = _.defaultTo(process.env.MONGODB_DATABASE, 'admin');
-const MONGO_URL = `mongodb://${MONGODB_SERVICE_HOST}:${MONGODB_SERVICE_PORT}/${MONGODB_DATABASE}`
+
+const MONGO_URL = `mongodb://${MONGODB_USER ? `${MONGODB_USER}:${MONGODB_PASSWORD}@` : ''}${MONGODB_SERVICE_HOST}:${MONGODB_SERVICE_PORT}/${MONGODB_DATABASE}`
 
 console.log('Connecting to', MONGO_URL)
 
