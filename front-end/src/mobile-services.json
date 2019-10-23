@@ -4,6 +4,18 @@
   "services": [
     {
       "config": {
+        "ios": {
+          "variantId": "7aa1a115-cd80-4579-bc9f-35dc1b952b10",
+          "variantSecret": "4fe3e42c-039f-442d-a0f5-ed11caf03ad6"
+        }
+      },
+      "id": "68b70ac3-f52c-11e9-afb6-12f216a753ee",
+      "name": "push",
+      "type": "push",
+      "url": "https://unifiedpush-unifiedpush-proxy-mobile-unifiedpush.apps.thadd-8469.open.redhat.com"
+    },
+    {
+      "config": {
         "auth-server-url": "https://sso-user-sso.apps.thadd-8469.open.redhat.com/auth",
         "confidential-port": 0,
         "public-client": true,
@@ -24,6 +36,12 @@
       "name": "sync-app",
       "type": "sync-app",
       "url": "http://ev-chargers-backend-ev-chargers-map.apps.thadd-8469.open.redhat.com/graphql"
+    },
+    {
+      "id": "46f1a827-f52e-11e9-afb6-12f216a753ee",
+      "name": "security",
+      "type": "security",
+      "url": "https://route-mobile-security-service.apps.thadd-8469.open.redhat.com"
     }
   ]
 }

@@ -23,6 +23,10 @@ import { init } from "@aerogear/app";
 const MOBILE_SERVICES = require('./mobile-services.json');
 const app = init(MOBILE_SERVICES);
 
+if (window.cordova) {
+  require('./cordova').initialize(app.config);
+}
+
 // Set up auth service
 const authService = new Auth(app.config);
 
@@ -106,12 +110,14 @@ class App extends Component {
       isAuthenticated: false,
     };
 
+    this.initializeDataService = this.initializeDataService.bind(this);
     this.initializeMap = this.initializeMap.bind(this);
     this.handleLocationUpdate = this.handleLocationUpdate.bind(this);
     this.handleSearch = this.handleSearch.bind(this);
     this.handleLogin = this.handleLogin.bind(this);
     this.handleLogout = this.handleLogout.bind(this);
     this.handleToggleFavorites = this.handleToggleFavorites.bind(this);
+    this.loginComplete = this.loginComplete.bind(this);
   }
 
   componentDidMount() {
@@ -120,60 +126,16 @@ class App extends Component {
     .then(() => {
       if (authService.isAuthenticated()) {
         // Load the user profile if we're logged in
-        return authService.loadUserProfile();
+        return this.loginComplete();
       } else {
-        this.setState({
+        return Promise.fromCallback(callback => this.setState({
           userProfile: null,
           isAuthLoading: false,
           isAuthenticated: false,
-        });
+        }, callback))
+        .then(this.initializeDataService);
       }
     })
-    .then(profile => {
-      this.setState({
-        userProfile: profile,
-        isAuthLoading: false,
-        isAuthenticated: authService.isAuthenticated(),
-      })
-    })
-    // Initialize the data sync service
-    .then(() => {
-      // Set up data sync service
-      const dataSyncConfig = _.find(app.config.configurations, {type: 'sync-app'});
-
-      const clientOptions = {
-        // httpUrl: `http://localhost:8080/${authService.isAuthenticated() ? 'auth-' : ''}graphql`,
-        // wsUrl: `http://localhost:8080/${authService.isAuthenticated() ? 'auth-' : ''}graphql`,
-        httpUrl: `${dataSyncConfig.url}${authService.isAuthenticated() ? '-auth' : ''}`,
-        wsUrl: `${dataSyncConfig.config.websocketUrl}${authService.isAuthenticated() ? '-auth' : ''}`,
-      }
-
-      if (authService.isAuthenticated()) {
-        const token = authService.extract().token;
-        clientOptions.authContextProvider = () => {
-          return {
-            headers: {
-              Authorization: `Bearer ${token}`
-            },
-            token,
-          }
-        };
-      }
-
-      const dataSyncService = new OfflineClient(clientOptions);
-      return dataSyncService.init();
-    })
-    .then(dataClient => {
-      // Capture the sync client for use later
-      return Promise.fromCallback(callback => this.setState({dataClient}, callback));
-    }, err => console.error('data sync initialization rejection', err))
-    .then(() => {
-      if (authService.isAuthenticated()) {
-        return this.state.dataClient.query({query: FAVORITES, fetchPolicy: 'network-only'})
-        .then(({data}) => this.setState({favoriteChargers: _.map(data.favorites, 'id')}));
-      }
-    })
-    .then(() => console.log('initialization complete'))
     .catch(err => console.error('initialization error', err));
   }
 
@@ -262,25 +224,7 @@ class App extends Component {
       localStorage.setItem('savedSearch', JSON.stringify(this.state.location));
     }
 
-    // Send the user to login via auth
-    authService.login().then(() => {
-      this.setState({
-        isAuthLoading: false,
-      })
-    }, err => {
-      this.setState({
-        isAuthLoading: false,
-      });
-
-      console.error('authService error', err);
-    })
-    .catch(err => {
-      this.setState({
-        isAuthLoading: false,
-      });
-
-      console.error('authService error', err);
-    });
+    authService.login().then(this.loginComplete)
   }
 
   handleLogout(event) {
@@ -334,6 +278,64 @@ class App extends Component {
       })
     ))
     .catch(err => console.error('mutation', err));
+  }
+
+  initializeDataService() {
+    // Set up data sync service
+    const dataSyncConfig = _.find(app.config.configurations, {type: 'sync-app'});
+
+    const clientOptions = {
+      // httpUrl: `http://localhost:8080/graphql${authService.isAuthenticated() ? '-auth' : ''}`,
+      // wsUrl: `http://localhost:8080/graphql${authService.isAuthenticated() ? '-auth' : ''}`,
+      httpUrl: `${dataSyncConfig.url}${authService.isAuthenticated() ? '-auth' : ''}`,
+      wsUrl: `${dataSyncConfig.config.websocketUrl}${authService.isAuthenticated() ? '-auth' : ''}`,
+    }
+
+    if (authService.isAuthenticated()) {
+      const token = authService.extract().token;
+      clientOptions.authContextProvider = () => {
+        return {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          token,
+        }
+      };
+    }
+
+    const dataSyncService = new OfflineClient(clientOptions);
+
+    return dataSyncService.init()
+    .then(dataClient => Promise.fromCallback(callback => this.setState({dataClient}, callback)))
+    .then(() => {
+      if (authService.isAuthenticated()) {
+        console.log('authenticated, fetching chargers');
+        return this.state.dataClient.query({query: FAVORITES, fetchPolicy: 'network-only'})
+        .then(({data}) => {
+          console.log('data', data); this.setState({favoriteChargers: _.map(data.favorites, 'id')})}, console.error);
+      }
+    })
+    .catch(err => console.error('data sync initialization rejection', err));
+  }
+
+  loginComplete() {
+    return authService.loadUserProfile()
+    .then(userProfile => Promise.fromCallback(callback => (
+      this.setState({
+        isAuthenticated: authService.isAuthenticated(),
+        isAuthLoading: false,
+        userProfile,
+      }, callback)
+    )))
+    .then(this.initializeDataService)
+    .then(() => console.log('initialization complete'))
+    .catch(err => {
+      this.setState({
+        isAuthLoading: false,
+      });
+
+      console.error('authService error', err);
+    })
   }
 
   render() {

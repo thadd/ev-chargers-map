@@ -1,0 +1,28 @@
+{
+  "prepare_queue": {
+    "installed": [],
+    "uninstalled": []
+  },
+  "config_munge": {
+    "files": {}
+  },
+  "installed_plugins": {
+    "cordova-plugin-whitelist": {
+      "PACKAGE_NAME": "dev.thadd.rhmds.evchargers"
+    },
+    "cordova-plugin-inappbrowser": {
+      "PACKAGE_NAME": "dev.thadd.rhmds.evchargers"
+    },
+    "cordova-plugin-aerogear-push": {
+      "PACKAGE_NAME": "dev.thadd.rhmds.evchargers"
+    },
+    "cordova-plugin-device": {
+      "PACKAGE_NAME": "dev.thadd.rhmds.evchargers"
+    }
+  },
+  "dependent_plugins": {
+    "phonegap-plugin-push": {
+      "PACKAGE_NAME": "dev.thadd.rhmds.evchargers"
+    }
+  }
+}

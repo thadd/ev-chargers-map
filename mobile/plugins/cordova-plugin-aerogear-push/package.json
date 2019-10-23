@@ -1,0 +1,55 @@
+{
+  "_from": "@aerogear/cordova-plugin-aerogear-push",
+  "_id": "@aerogear/cordova-plugin-aerogear-push@2.7.0",
+  "_inBundle": false,
+  "_integrity": "sha512-mAxJrc2SOgdt17SqgRexjvVO0DV+tSx09AblboLWx0zS5hOm/71rxB4xio06wtj5RMf+S2BGbVlB2m1t+1L37Q==",
+  "_location": "/@aerogear/cordova-plugin-aerogear-push",
+  "_phantomChildren": {},
+  "_requested": {
+    "type": "tag",
+    "registry": true,
+    "raw": "@aerogear/cordova-plugin-aerogear-push",
+    "name": "@aerogear/cordova-plugin-aerogear-push",
+    "escapedName": "@aerogear%2fcordova-plugin-aerogear-push",
+    "scope": "@aerogear",
+    "rawSpec": "",
+    "saveSpec": null,
+    "fetchSpec": "latest"
+  },
+  "_requiredBy": [
+    "#USER",
+    "/"
+  ],
+  "_resolved": "https://registry.npmjs.org/@aerogear/cordova-plugin-aerogear-push/-/cordova-plugin-aerogear-push-2.7.0.tgz",
+  "_shasum": "23557d355458cd3782886c1bc7b49525a2c41f28",
+  "_spec": "@aerogear/cordova-plugin-aerogear-push",
+  "_where": "/Users/tselden/src/ev-chargers-map/mobile",
+  "author": {
+    "name": "Aerogear",
+    "email": "aerogear@googlegroups.com"
+  },
+  "bugs": {
+    "url": "https://issues.jboss.org/projects/AGCORDOVA/issues"
+  },
+  "bundleDependencies": false,
+  "cordova": {
+    "id": "cordova-plugin-aerogear-push",
+    "platforms": []
+  },
+  "deprecated": false,
+  "description": "Cordova plugin for AeroGear Push Notifications",
+  "homepage": "https://github.com/aerogear/aerogear-js-sdk#readme",
+  "keywords": [
+    "ecosystem:cordova"
+  ],
+  "license": "Apache-2.0",
+  "name": "@aerogear/cordova-plugin-aerogear-push",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aerogear/aerogear-js-sdk.git"
+  },
+  "version": "2.7.0"
+}

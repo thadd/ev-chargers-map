@@ -7032,7 +7032,7 @@ a.text-dark:hover, a.text-dark:focus {
     border-color: #dee2e6; } }
 
 #root {
-  font-family: tahoma; }
+  font-family: 'california', 'tahoma', 'helvetica'; }
 
 .root {
   height: 100vh; }
