@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ev-chargers-frontend
+  name: ev-chargers-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ev-chargers-frontend
+  template:
+    metadata:
+      labels:
+        app: ev-chargers-frontend
+    spec:
+      containers:
+        - image: ev-chargers/ev-chargers-frontend:latest
+          imagePullPolicy: Always
+          name: ev-chargers-frontend
+          ports:
+            - containerPort: 8080
+              protocol: TCP

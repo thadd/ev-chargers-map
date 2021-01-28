@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: ev-chargers-frontend
+  name: ev-chargers-frontend
+spec:
+  type: NodePort
+  ports:
+    - name: 8080-tcp
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: ev-chargers-frontend
