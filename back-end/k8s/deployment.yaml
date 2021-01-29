@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: ev-chargers-backend
+    app.kubernetes.io/part-of: ev-chargers
   name: ev-chargers-backend
 spec:
   replicas: 1

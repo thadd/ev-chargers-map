@@ -5,7 +5,6 @@ metadata:
     app: ev-chargers-frontend
   name: ev-chargers-frontend
 spec:
-  type: NodePort
   ports:
     - name: 8080-tcp
       port: 8080
