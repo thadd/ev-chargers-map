@@ -11,8 +11,8 @@ import './App.css';
 const geocoder = new OpenStreetMapProvider();
 
 // Uncomment these lines to use local endpoint
-const API_ROOT = 'http://localhost:8080';
-const FETCH_OPTIONS = {};
+// const API_ROOT = 'http://ev-chargers-backend-ev-chargers.apps.cluster-aws-0fd2.aws-0fd2.example.opentlc.com';
+// const FETCH_OPTIONS = {};
 
 // // Uncomment these lines to use OpenShift endpoint
 // const API_ROOT = 'http://ev-chargers-app-wings-3scale-demo.e8ca.engint.openshiftapps.com';
@@ -21,6 +21,10 @@ const FETCH_OPTIONS = {};
 // // Uncomment these lines to use 3scale endpoint
 // const API_ROOT = 'https://api-2445582727862.staging.gw.apicast.io:443';
 // const FETCH_OPTIONS = {headers: {'user-key': '9be4f9757ce91e4a4cd6f3d0a0cfaf60'}};
+
+// Uncomment these lines to use environment
+const API_ROOT = window._env_.CONFIG_BACKEND_URL
+const FETCH_OPTIONS = {headers: {'user-key': window._env_.CONFIG_USER_KEY}};
 
 class App extends Component {
   constructor(props) {
