@@ -1,23 +1,35 @@
-apiVersion: apps/v1
-kind: Deployment
+kind: DeploymentConfig
+apiVersion: apps.openshift.io/v1
 metadata:
+  name: ev-chargers-backend
   labels:
     app.kubernetes.io/part-of: ev-chargers
-  name: ev-chargers-backend
 spec:
+  strategy:
+    type: Rolling
+  triggers:
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+          - ev-chargers-backend
+        from:
+          kind: ImageStreamTag
+          namespace: ev-chargers
+          name: 'ev-chargers-backend:latest'
+    - type: ConfigChange
   replicas: 1
   selector:
-    matchLabels:
-      app: ev-chargers-backend
+    deploymentconfig: ev-chargers-backend
   template:
     metadata:
       labels:
-        app: ev-chargers-backend
+        deploymentconfig: ev-chargers-backend
     spec:
       containers:
-        - image: ev-chargers/ev-chargers-backend:latest
-          imagePullPolicy: Always
-          name: ev-chargers-backend
+        - name: ev-chargers-backend
+          image: ev-chargers/ev-chargers-backend:latest
           ports:
             - containerPort: 8080
               protocol: TCP
+      restartPolicy: Always
