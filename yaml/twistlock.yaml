@@ -1,0 +1,76 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: twistlock-scan
+  namespace: ev-chargers
+spec:
+  resources:
+    inputs:
+      - name: image
+        type: image
+  params:
+    - name: twistlockConsolePath
+      type: string
+      description: The URL of the Twistlock conosle to use
+      default: https://twistlock-console.twistlock.svc:8083
+  steps:
+  - image: registry.redhat.io/ubi8/ubi
+    name: grab-twistlock-cli
+    env:
+      - name: TWISTLOCK_USER
+        valueFrom:
+          secretKeyRef:
+            name: twistlock-ciuser
+            key: username
+      - name: TWISTLOCK_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: twistlock-ciuser
+            key: password
+    volumeMounts:
+      - name: twistcli-dir
+        mountPath: /workspace/twistcli-dir
+    script: |
+      #!/usr/bin/env bash
+      curl -k -ssl \
+        -u "$TWISTLOCK_USER:$TWISTLOCK_PASSWORD" \
+        $(params.twistlockConsolePath)/api/v1/util/twistcli \
+        -o /workspace/twistcli-dir/twistcli
+
+  - image: registry.redhat.io/ubi8/ubi
+    name: make-twistlock-executable
+    volumeMounts:
+      - name: twistcli-dir
+        mountPath: /workspace/twistcli-dir
+    command:
+      - chmod
+      - a+x
+      - /workspace/twistcli-dir/twistcli
+
+  - image: $(inputs.resources.image.url)
+    name: scan-image
+    env:
+      - name: TWISTLOCK_USER
+        valueFrom:
+          secretKeyRef:
+            name: twistlock-ciuser
+            key: username
+      - name: TWISTLOCK_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: twistlock-ciuser
+            key: password
+    volumeMounts:
+      - name: twistcli-dir
+        mountPath: /workspace/twistcli-dir
+    script: |
+      #!/usr/bin/env bash
+      /workspace/twistcli-dir/twistcli images scan \
+        --user $TWISTLOCK_USER \
+        --password $TWISTLOCK_PASSWORD \
+        --address $(params.twistlockConsolePath) \
+        --containerized \
+        $(inputs.resources.image.url)
+  volumes:
+  - name: twistcli-dir
+    emptyDir: {}
