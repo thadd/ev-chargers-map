@@ -1,262 +1,10 @@
-kind: Project
+###
+### Core setup 
+###
 apiVersion: project.openshift.io/v1
+kind: Project
 metadata:
   name: ev-chargers
----
-apiVersion: tekton.dev/v1alpha1
-kind: Task
-metadata:
-  name: apply-manifests
-  namespace: ev-chargers
-spec:
-  inputs:
-    resources:
-      - name: source
-        type: git
-    params:
-      - name: MANIFEST_DIR
-        description: The directory in source that contains yaml manifests
-        type: string
-        default: "k8s"
-  steps:
-    - name: apply
-      image: quay.io/openshift/origin-cli:latest
-      workingDir: /workspace/source
-      script: |
-        #!/usr/bin/env bash
-        echo Applying manifests in $(inputs.params.MANIFEST_DIR) directory
-        oc apply -f $(inputs.params.MANIFEST_DIR)
-        echo -----------------------------------
----
-apiVersion: tekton.dev/v1alpha1
-kind: Task
-metadata:
-  name: update-deployment
-  namespace: ev-chargers
-spec:
-  inputs:
-    resources:
-      - name: image
-        type: image
-    params:
-      - name: DEPLOYMENT
-        description: The name of the deployment to patch the image
-        type: string
-  steps:
-    - name: patch
-      image: quay.io/openshift/origin-cli:latest
-      script: |
-        #!/usr/bin/env bash
-
-        oc patch deployment $(inputs.params.DEPLOYMENT) --patch='{"spec":{"template":{"spec":{
-          "containers":[{
-            "name": "$(inputs.params.DEPLOYMENT)",
-            "image":"$(inputs.resources.image.url)"
-          }]
-        }}}}'
----
-apiVersion: tekton.dev/v1beta1
-kind: Task
-metadata:
-  name: inject-environment
-  namespace: ev-chargers
-spec:
-  params:
-    - default: 'false'
-      description: >-
-        Verify the TLS on the registry endpoint (for push/pull to a non-TLS
-        registry)
-      name: TLSVERIFY
-      type: string
-  resources:
-    inputs:
-      - name: image
-        type: image
-  steps:
-    - image: quay.io/buildah/stable
-      name: inject-environment
-      securityContext:
-        privileged: true
-      script: |
-        #!/usr/bin/env bash
-
-        cat > env-setup.sh << 'EOF'
-          #!/bin/bash
-
-          env | grep '^CONFIG_' > .env
-
-          # Recreate config file
-          rm -rf ./env-config.js
-          touch ./env-config.js
-
-          # Add assignment 
-          echo "window._env_ = {" >> ./env-config.js
-
-          # Read each line in .env file
-          # Each line represents key=value pairs
-          while read -r line || [[ -n "$line" ]];
-          do
-            # Split env variables by character `=`
-            if printf '%s\n' "$line" | grep -q -e '='; then
-              varname=$(printf '%s\n' "$line" | sed -e 's/=.*//')
-              varvalue=$(printf '%s\n' "$line" | sed -e 's/^[^=]*=//')
-            fi
-
-            # Read value of current variable if exists as Environment variable
-            value=$(printf '%s\n' "${!varname}")
-            # Otherwise use value from .env file
-            [[ -z $value ]] && value=${varvalue}
-            
-            # Append configuration property to JS file
-            echo "  $varname: \"$value\"," >> ./env-config.js
-          done < .env
-
-          echo "}" >> ./env-config.js
-        EOF
-
-        chmod +x env-setup.sh
-
-        cat > Dockerfile << EOF
-          FROM $(inputs.resources.image.url)
-
-          COPY ./env-setup.sh ./
-          ENTRYPOINT ./env-setup.sh && /bin/sh -c /usr/libexec/s2i/run
-        EOF
-
-        buildah bud --tls-verify=$(inputs.params.TLSVERIFY) \
-          -f Dockerfile \
-          -t docker://$(inputs.resources.image.url)
-
----
-apiVersion: tekton.dev/v1alpha1
-kind: ClusterTask
-metadata:
-  name: s2i-web-app
-spec:
-  inputs:
-    resources:
-      - name: source
-        type: git
-    params:
-      - name: VERSION
-        description: The version of the nodejs
-        default: '14.x'
-        type: string
-      - name: PATH_CONTEXT
-        description: The location of the path to run s2i from.
-        default: .
-        type: string
-      - name: OUTPUT_DIR
-        description: The location of the build output directory
-        default: build
-        type: string
-      - name: TLSVERIFY
-        description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
-        default: "false"
-        type: string
-  outputs:
-    resources:
-      - name: image
-        type: image
-  steps:
-    - name: generate
-      image: quay.io/openshift-pipeline/s2i
-      workingdir: /workspace/source
-      command: ['s2i', 'build', '$(inputs.params.PATH_CONTEXT)', 'docker.io/nodeshift/ubi8-s2i-web-app:$(inputs.params.VERSION)', '--as-dockerfile', '/gen-source/Dockerfile.gen', '--env', 'OUTPUT_DIR=$(inputs.params.OUTPUT_DIR)']
-      volumeMounts:
-        - name: gen-source
-          mountPath: /gen-source
-    - name: build
-      image: quay.io/buildah/stable
-      workingdir: /gen-source
-      command: ['buildah', 'bud', '--tls-verify=$(inputs.params.TLSVERIFY)', '--layers', '-f', '/gen-source/Dockerfile.gen', '-t', '$(outputs.resources.image.url)', '.']
-      volumeMounts:
-        - name: varlibcontainers
-          mountPath: /var/lib/containers
-        - name: gen-source
-          mountPath: /gen-source
-      securityContext:
-        privileged: true
-    - name: push
-      image: quay.io/buildah/stable
-      command: ['buildah', 'push', '--tls-verify=$(inputs.params.TLSVERIFY)', '$(outputs.resources.image.url)', 'docker://$(outputs.resources.image.url)']
-      volumeMounts:
-        - name: varlibcontainers
-          mountPath: /var/lib/containers
-      securityContext:
-        privileged: true
-  volumes:
-    - name: varlibcontainers
-      emptyDir: {}
-    - name: gen-source
-      emptyDir: {}
----
-apiVersion: tekton.dev/v1alpha1
-kind: ClusterTask
-metadata:
-  name: webapp-build-runtime
-spec:
-  inputs:
-    resources:
-    - name: image
-      type: image
-    params:
-    - name: SOURCE_PATH
-      description: The location of the built webapp
-      default: /opt/app-root/output
-    - name: WEB_RUNTIME_IMAGE
-      description: The Web Runtime image to use,  defaults to centos/nginx-114-centos7
-      default: docker.io/centos/nginx-114-centos7
-    - name: TLSVERIFY
-      description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
-      default: "false"
-  outputs:
-    resources:
-    - name: image
-      type: image
-  steps:
-  - name: copy-source
-    image: $(inputs.resources.image.url)
-    workingdir: $(inputs.params.SOURCE_PATH)
-    command: ['cp', '-Rvp', '$(inputs.params.SOURCE_PATH)', '/gen-source/build']
-    volumeMounts:
-    - name: gen-source
-      mountPath: /gen-source
-  - name: generate
-    image: quay.io/openshift-pipeline/s2i
-    workingdir: /workspace/source
-    command: ['s2i', 'build', '/gen-source/build', '$(inputs.params.WEB_RUNTIME_IMAGE)', '--as-dockerfile', '/gen-source/Dockerfile.gen']
-    volumeMounts:
-    - name: gen-source
-      mountPath: /gen-source
-    securityContext:
-      privileged: true
-  - name: build
-    image: quay.io/buildah/stable
-    workingdir: /gen-source
-    command: ['buildah', 'bud', '--tls-verify=$(inputs.params.TLSVERIFY)', '--layers', '-f', '/gen-source/Dockerfile.gen', '-t', '$(outputs.resources.image.url)', '.']
-    volumeMounts:
-    - name: varlibcontainers
-      mountPath: /var/lib/containers
-    - name: gen-source
-      mountPath: /gen-source
-    securityContext:
-      privileged: true
-
-  - name: push
-    image: quay.io/buildah/stable
-    command: ['buildah', 'push', '--tls-verify=$(inputs.params.TLSVERIFY)', '$(outputs.resources.image.url)', 'docker://$(outputs.resources.image.url)']
-    volumeMounts:
-    - name: varlibcontainers
-      mountPath: /var/lib/containers
-    securityContext:
-      privileged: true
-
-  volumes:
-  - name: varlibcontainers
-    emptyDir: {}
-  - name: gen-source
-    emptyDir: {}
 ---
 apiVersion: tekton.dev/v1alpha1
 kind: PipelineResource
@@ -305,142 +53,460 @@ spec:
       value: image-registry.openshift-image-registry.svc:5000/ev-chargers/ev-chargers-backend:latest
 ---
 apiVersion: tekton.dev/v1alpha1
-kind: Pipeline
+kind: Task
 metadata:
-  name: build-and-deploy-frontend
+  name: apply-manifests
   namespace: ev-chargers
 spec:
-  resources:
-    - name: ev-chargers-repo
-      type: git
-    - name: built-ev-chargers-frontend-image
-      type: image
-    - name: runtime-ev-chargers-frontend-image
-      type: image
-
-  tasks:
-    - name: build-frontend
-      taskRef:
-        name: s2i-web-app
-        kind: ClusterTask
-      resources:
-        inputs:
-          - name: source
-            resource: ev-chargers-repo
-        outputs:
-          - name: image
-            resource: built-ev-chargers-frontend-image
-      params:
-        - name: TLSVERIFY
-          value: "false"
-        - name: PATH_CONTEXT
-          value: "front-end"
-
-    - name: build-runtime-image
-      taskRef:
-        name: webapp-build-runtime
-        kind: ClusterTask
-      resources:
-        inputs:
-          - name: image
-            resource: built-ev-chargers-frontend-image
-        outputs:
-          - name: image
-            resource: runtime-ev-chargers-frontend-image
-      params:
-        - name: TLSVERIFY
-          value: "false"
-      runAfter:
-        - build-frontend
-
-    - name: apply-web-app-runtime-manifests
-      taskRef:
-        name: apply-manifests
-      resources:
-        inputs:
-          - name: source
-            resource: ev-chargers-repo
-      params:
-        - name: MANIFEST_DIR
-          value: "front-end/k8s"
-      runAfter:
-        - build-runtime-image
-        
-    - name: inject-environment-loader
-      taskRef:
-        name: inject-environment
-      resources:
-        inputs:
-          - name: image
-            resource: runtime-ev-chargers-frontend-image
-      runAfter:
-        - apply-web-app-runtime-manifests
-
-    - name: update-web-app-runtime-image
-      taskRef:
-        name: update-deployment
-      resources:
-        inputs:
-          - name: image
-            resource: runtime-ev-chargers-frontend-image
-      params:
-        - name: DEPLOYMENT
-          value: "ev-chargers-frontend"
-      runAfter:
-        - inject-environment-loader
+  params:
+    - default: k8s
+      description: The directory in source that contains yaml manifests
+      name: MANIFEST_DIR
+      type: string
+  steps:
+    - image: 'quay.io/openshift/origin-cli:latest'
+      name: apply
+      resources: {}
+      script: |
+        #!/usr/bin/env bash
+        set -xe
+        echo Applying manifests in $(params.MANIFEST_DIR) directory
+        oc apply -f $(params.MANIFEST_DIR)
+        echo -----------------------------------
+      workingDir: /workspace/source
+  workspaces:
+    - name: source
 ---
 apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: update-deployment
+  namespace: ev-chargers
+spec:
+  params:
+    - description: The full URL of the image in the OpenShift registry
+      name: IMAGE
+      type: string
+    - description: The name of the deployment to patch the image
+      name: DEPLOYMENT
+      type: string
+  steps:
+    - image: 'quay.io/openshift/origin-cli:latest'
+      name: patch
+      resources: {}
+      script: >
+        #!/usr/bin/env bash
+
+        oc patch deployment $(params.DEPLOYMENT)
+        --patch='{"spec":{"template":{"spec":{
+          "containers":[{
+            "name": "$(params.DEPLOYMENT)",
+            "image":"$(params.IMAGE)"
+          }]
+        }}}}'
+---
+###
+### Backend setup
+###
+apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
   name: build-and-deploy-backend
   namespace: ev-chargers
 spec:
-  resources:
-    - name: ev-chargers-repo
-      type: git
-    - name: ev-chargers-backend-image
-      type: image
-
+  params:
+    - name: git-repo
+      default: https://github.com/thadd/ev-chargers-map
+      type: string
+    - name: image
+      default: image-registry.openshift-image-registry.svc:5000/ev-chargers/ev-chargers-backend:latest
+      type: string
   tasks:
-    - name: build-backend
+    - name: git-clone
       taskRef:
-        name: s2i-nodejs-pr
         kind: ClusterTask
-      resources:
-        inputs:
-          - name: source
-            resource: ev-chargers-repo
-        outputs:
-          - name: image
-            resource: ev-chargers-backend-image
+        name: git-clone
       params:
+        - name: url
+          value: $(params.git-repo)
+      workspaces:
+        - name: output
+          workspace: source
+    - name: build-backend
+      runAfter:
+        - git-clone
+      taskRef:
+        kind: ClusterTask
+        name: s2i-nodejs
+      params:
+        - name: IMAGE
+          value: $(params.image)
+        - name: PATH_CONTEXT
+          value: back-end
         - name: TLSVERIFY
           value: "false"
-        - name: PATH_CONTEXT
-          value: "back-end"
-
+      workspaces:
+        - name: source
+          workspace: source
     - name: apply-backend-manifests
-      taskRef:
-        name: apply-manifests
-      resources:
-        inputs:
-          - name: source
-            resource: ev-chargers-repo
-      params:
-        - name: MANIFEST_DIR
-          value: "back-end/k8s"
       runAfter:
         - build-backend
-
-    - name: update-backend-image
       taskRef:
-        name: update-deployment
-      resources:
-        inputs:
-          - name: image
-            resource: ev-chargers-backend-image
+        kind: Task
+        name: apply-manifests
       params:
-        - name: DEPLOYMENT
-          value: "ev-chargers-backend"
+        - name: MANIFEST_DIR
+          value: back-end/k8s
+      workspaces:
+        - name: source
+          workspace: source
+    - name: update-backend-deployment
       runAfter:
         - apply-backend-manifests
+      taskRef:
+        kind: Task
+        name: update-deployment
+      params:
+        - name: IMAGE
+          value: $(params.image)
+        - name: DEPLOYMENT
+          value: ev-chargers-backend
+  workspaces:
+    - name: source
+---
+###
+### Frontend setup
+###
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: inject-environment
+  namespace: ev-chargers
+spec:
+  params:
+    - name: IMAGE
+      description: The full URL of the image in the OpenShift registry
+      type: string
+    - name: TLSVERIFY
+      description: >-
+        Verify the TLS on the registry endpoint (for push/pull to a non-TLS
+        registry)
+      type: string
+      default: 'false'
+  steps:
+    - image: quay.io/buildah/stable
+      name: inject-environment
+      script: |
+        #!/usr/bin/env bash
+
+        cat > env-setup.sh << 'EOF'
+          #!/bin/bash
+
+          env | grep '^CONFIG_' > .env
+
+          # Recreate config file
+          rm -rf ./env-config.js
+          touch ./env-config.js
+
+          # Add assignment 
+          echo "window._env_ = {" >> ./env-config.js
+
+          # Read each line in .env file
+          # Each line represents key=value pairs
+          while read -r line || [[ -n "$line" ]];
+          do
+            # Split env variables by character `=`
+            if printf '%s\n' "$line" | grep -q -e '='; then
+              varname=$(printf '%s\n' "$line" | sed -e 's/=.*//')
+              varvalue=$(printf '%s\n' "$line" | sed -e 's/^[^=]*=//')
+            fi
+
+            # Read value of current variable if exists as Environment variable
+            value=$(printf '%s\n' "${!varname}")
+            # Otherwise use value from .env file
+            [[ -z $value ]] && value=${varvalue}
+            
+            # Append configuration property to JS file
+            echo "  $varname: \"$value\"," >> ./env-config.js
+          done < .env
+
+          echo "}" >> ./env-config.js
+        EOF
+
+        chmod +x env-setup.sh
+
+        cat > Dockerfile << EOF
+          FROM $(params.IMAGE)
+
+          COPY ./env-setup.sh ./
+          ENTRYPOINT ./env-setup.sh && /bin/sh -c /usr/libexec/s2i/run
+        EOF
+
+        buildah bud \
+          --storage-driver=vfs \
+          --tls-verify=$(params.TLSVERIFY) \
+          -f Dockerfile \
+          -t docker://$(params.IMAGE)
+---
+apiVersion: tekton.dev/v1alpha1
+kind: ClusterTask
+metadata:
+  name: s2i-web-app
+spec:
+  params:
+    - name: IMAGE
+      description: The full URL of the image in the OpenShift registry
+      type: string
+
+    - name: VERSION
+      description: The version of the nodejs
+      default: '14.x'
+      type: string
+
+    - name: PATH_CONTEXT
+      description: The location of the path to run s2i from.
+      default: .
+      type: string
+
+    - name: OUTPUT_DIR
+      description: The location of the build output directory
+      default: build
+      type: string
+
+    - name: TLSVERIFY
+      description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+      default: "false"
+      type: string
+  steps:
+    - name: generate
+      image: quay.io/openshift-pipeline/s2i
+      workingdir: /workspace/source
+      command: ['s2i', 'build', '$(params.PATH_CONTEXT)', 'docker.io/nodeshift/ubi8-s2i-web-app:$(params.VERSION)', '--as-dockerfile', '/gen-source/Dockerfile.gen', '--env', 'OUTPUT_DIR=$(params.OUTPUT_DIR)']
+      volumeMounts:
+        - name: gen-source
+          mountPath: /gen-source
+    - name: build
+      image: quay.io/buildah/stable
+      workingdir: /gen-source
+      command: 
+        - buildah
+        - bud
+        - '--storage-driver=vfs'
+        - '--tls-verify=$(params.TLSVERIFY)'
+        - '--layers'
+        - '-f'
+        - '/gen-source/Dockerfile.gen'
+        - '-t'
+        - $(params.IMAGE)
+        - .
+      volumeMounts:
+        - name: varlibcontainers
+          mountPath: /var/lib/containers
+        - name: gen-source
+          mountPath: /gen-source
+    - name: push
+      image: quay.io/buildah/stable
+      command:
+        - buildah
+        - push
+        - '--storage-driver=vfs'
+        - '--tls-verify=$(params.TLSVERIFY)'
+        - '--digestfile=$(workspaces.source.path)/image-digest'
+        - $(params.IMAGE)
+        - 'docker://$(params.IMAGE)'
+      volumeMounts:
+        - name: varlibcontainers
+          mountPath: /var/lib/containers
+  volumes:
+    - name: varlibcontainers
+      emptyDir: {}
+    - name: gen-source
+      emptyDir: {}
+
+  workspaces:
+    - name: source
+---
+apiVersion: tekton.dev/v1alpha1
+kind: ClusterTask
+metadata:
+  name: webapp-build-runtime
+spec:
+  params:
+    - name: BUILT_IMAGE
+      description: The full URL of the build image in the OpenShift registry
+      type: string
+
+    - name: RUNTIME_IMAGE
+      description: The full URL of the runtime (output) image in the OpenShift registry
+      type: string
+
+    - name: SOURCE_PATH
+      description: The location of the built webapp
+      default: /opt/app-root/output
+
+    - name: WEB_RUNTIME_IMAGE
+      description: The Web Runtime image to use,  defaults to centos/nginx-114-centos7
+      default: docker.io/centos/nginx-114-centos7
+
+    - name: TLSVERIFY
+      description: Verify the TLS on the registry endpoint (for push/pull to a non-TLS registry)
+      default: "false"
+  steps:
+  - name: copy-source
+    image: $(params.BUILT_IMAGE)
+    workingdir: $(params.SOURCE_PATH)
+    command: ['cp', '-Rvp', '$(params.SOURCE_PATH)', '/gen-source/build']
+    volumeMounts:
+    - name: gen-source
+      mountPath: /gen-source
+
+  - name: generate
+    image: quay.io/openshift-pipeline/s2i
+    workingdir: /workspace/source
+    command: ['s2i', 'build', '/gen-source/build', '$(params.WEB_RUNTIME_IMAGE)', '--as-dockerfile', '/gen-source/Dockerfile.gen']
+    volumeMounts:
+    - name: gen-source
+      mountPath: /gen-source
+
+  - name: build
+    image: quay.io/buildah/stable
+    workingdir: /gen-source
+    command: 
+      - buildah
+      - bud
+      - '--storage-driver=vfs'
+      - '--tls-verify=$(params.TLSVERIFY)'
+      - '--layers'
+      - '-f'
+      - '/gen-source/Dockerfile.gen'
+      - '-t'
+      - $(params.RUNTIME_IMAGE)
+      - .
+    volumeMounts:
+    - name: varlibcontainers
+      mountPath: /var/lib/containers
+    - name: gen-source
+      mountPath: /gen-source
+
+  - name: push
+    image: quay.io/buildah/stable
+    command:
+      - buildah
+      - push
+      - '--storage-driver=vfs'
+      - '--tls-verify=$(params.TLSVERIFY)'
+      - $(params.RUNTIME_IMAGE)
+      - 'docker://$(params.RUNTIME_IMAGE)'
+    volumeMounts:
+    - name: varlibcontainers
+      mountPath: /var/lib/containers
+
+  volumes:
+  - name: varlibcontainers
+    emptyDir: {}
+  - name: gen-source
+    emptyDir: {}
+
+  workspaces:
+    - name: source
+---
+apiVersion: tekton.dev/v1alpha1
+kind: Pipeline
+metadata:
+  name: build-and-deploy-frontend
+  namespace: ev-chargers
+spec:
+  params:
+    - name: git-repo
+      default: https://github.com/thadd/ev-chargers-map
+      type: string
+
+    - name: built-image
+      default: image-registry.openshift-image-registry.svc:5000/ev-chargers/built-ev-chargers-frontend:latest
+      type: string
+
+    - name: runtime-image
+      default: image-registry.openshift-image-registry.svc:5000/ev-chargers/runtime-ev-chargers-frontend:latest
+      type: string
+  tasks:
+    - name: git-clone
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.git-repo)
+      workspaces:
+        - name: output
+          workspace: source
+    - name: build-frontend
+      runAfter:
+        - git-clone
+      taskRef:
+        name: s2i-web-app
+        kind: ClusterTask
+      params:
+        - name: IMAGE
+          value: $(params.built-image)
+
+        - name: TLSVERIFY
+          value: "false"
+
+        - name: PATH_CONTEXT
+          value: "front-end"
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: build-runtime-image
+      runAfter:
+        - build-frontend
+      taskRef:
+        name: webapp-build-runtime
+        kind: ClusterTask
+      params:
+        - name: BUILT_IMAGE
+          value: $(params.built-image)
+        - name: RUNTIME_IMAGE
+          value: $(params.runtime-image)
+        - name: TLSVERIFY
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: apply-web-app-runtime-manifests
+      taskRef:
+        name: apply-manifests
+      params:
+        - name: MANIFEST_DIR
+          value: "front-end/k8s"
+      runAfter:
+        - build-runtime-image
+      workspaces:
+        - name: source
+          workspace: source
+        
+    - name: inject-environment-loader
+      runAfter:
+        - apply-web-app-runtime-manifests
+      taskRef:
+        name: inject-environment
+      params:
+        - name: IMAGE
+          value: $(params.runtime-image)
+
+    - name: update-web-app-runtime-image
+      runAfter:
+        - inject-environment-loader
+      taskRef:
+        name: update-deployment
+
+      params:
+        - name: DEPLOYMENT
+          value: "ev-chargers-frontend"
+        - name: IMAGE
+          value: $(params.runtime-image)
+
+  workspaces:
+    - name: source

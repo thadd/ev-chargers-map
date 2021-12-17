@@ -1,0 +1,74 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: acs-scan
+  namespace: ev-chargers
+spec:
+  params:
+    - name: acs-secret
+      type: string
+      description: The name of the secret that contains ACS secrets
+      default: acs-cicd
+    - name: image
+      type: string
+      description: image path
+  volumes:
+  - name: acscli-dir
+    emptyDir: {}
+  steps:
+  - image: registry.redhat.io/ubi8/ubi
+    name: download-cli
+    volumeMounts:
+      - name: acscli-dir
+        mountPath: /workspace/acscli-dir
+    env:
+    - name: ACS_CENTRAL_URL
+      valueFrom:
+        secretKeyRef:
+          name: $(params.acs-secret)
+          key: ACS_CENTRAL_URL
+    - name: ACS_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: $(params.acs-secret)
+          key: ACS_TOKEN
+    script: |
+      #!/usr/bin/env bash
+      curl -k -ssl -L \
+        -H "Authorization: Bearer ${ACS_TOKEN}" \
+        ${ACS_CENTRAL_URL}/api/cli/download/roxctl-linux \
+        -o /workspace/acscli-dir/roxctl
+
+      chmod +x /workspace/acscli-dir/roxctl
+
+  - image: registry.redhat.io/ubi8/ubi
+    name: scan-image
+    volumeMounts:
+      - name: acscli-dir
+        mountPath: /workspace/acscli-dir
+    env:
+    - name: ACS_CENTRAL_URL
+      valueFrom:
+        secretKeyRef:
+          name: $(params.acs-secret)
+          key: ACS_CENTRAL_URL
+    - name: ACS_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: $(params.acs-secret)
+          key: ACS_TOKEN
+    script: |
+      #!/usr/bin/env bash
+
+      echo ${ACS_TOKEN} > TOKEN_FILE
+
+      /workspace/acscli-dir/roxctl \
+        image scan \
+        --insecure \
+        --insecure-skip-tls-verify \
+        --endpoint ${ACS_CENTRAL_URL} \
+        --image $(params.image) \
+        --token-file TOKEN_FILE
+  volumes:
+  - name: acscli-dir
+    emptyDir: {}
